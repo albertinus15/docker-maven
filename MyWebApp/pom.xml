@@ -18,4 +18,14 @@
   <build>
     <finalName>MyWebApp</finalName>
   </build>
+    <distributionManagement>
+        <repository>
+            <id>maven-releases</id>
+            <url>http://156.67.219.189:8081/repository/maven-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>maven-snapshots</id>
+            <url>http://156.67.219.189:8081/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
 </project>
