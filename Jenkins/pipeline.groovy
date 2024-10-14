@@ -67,8 +67,8 @@ pipeline {
             steps {
                 script {
                     def image_tag = getCommitHashAndDateTime()
-                    sh "docker build -t my-app:${image_tag} -f MyWebApp/Dockerfile ."
-                    sh "docker tag my-app:${image_tag} harbor.ntx-technology.com/my-app:${image_tag}"
+                    sh "docker build -t maven-app:${image_tag} -f MyWebApp/Dockerfile ."
+                    sh "docker tag maven-app:${image_tag} harbor.ntx-technology.com/my-app/maven-app:${image_tag}"
                 }
             }
         }
@@ -78,7 +78,7 @@ pipeline {
                 script {
                     def image_tag = getCommitHashAndDateTime()
                     withDockerRegistry(credentialsId: 'local-registry', toolName: 'docker', url: 'https://harbor.ntx-technology.com') {
-                        sh "docker push harbor.ntx-technology.com/my-app:${image_tag}"
+                        sh "docker push harbor.ntx-technology.com/my-app/maven-app:${image_tag}"
                     }
                 }
             }
