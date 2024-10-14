@@ -1,3 +1,13 @@
+import java.text.SimpleDateFormat
+
+def getCommitHashAndDateTime() {
+    def commitHash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+    def date = new Date()
+    def formatter = new SimpleDateFormat("yyyy-MM-dd")
+    def formattedDate = formatter.format(date)
+    return "${commitHash}-${formattedDate}"
+}
+
 pipeline {
     agent any
     
@@ -41,6 +51,30 @@ pipeline {
             steps {
                 sh 'mvn package -f MyWebApp/pom.xml'
             }
-        }        
+        }
+
+        stage('Publish Artifact') {
+            steps {
+                withMaven(globalMavenSettingsConfig: 'setting-maven', jdk: '', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
+                    sh 'mvn deploy -f MyWebApp/pom.xml'
+                }
+            }
+        }
+        
+        stage('Build and Tag Docker Image') {
+            steps {
+                def image_tag = getCommitHashAndDateTime()
+                sh "docker build -t my-app:${image_tag} ."
+                sh "docker tag my-app:${image_tag} harbor.ntx-technology.com/my-app:${image_tag}"
+            }
+        }
+
+        stage('Push to Docker Registry') {
+            steps {
+                def image_tag = getCommitHashAndDateTime()
+                withDockerRegistry(credentialsId: 'local-registry', toolName: 'docker', url: 'https://harbor.ntx-technology.com') {
+                sh "docker push harbor.ntx-technology.com/my-app:${image_tag}"
+            }
+        }                
     }
 }
