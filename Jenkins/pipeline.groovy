@@ -38,11 +38,13 @@ pipeline {
             }
         }
     
-        stage('Sonar Anlysis') {
+        stage('Sonar Analysis') {
             steps {
                 withSonarQubeEnv('sonar') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=taskmaster -Dsonar.projectKey=taskmaster \
-                    -Dsonar.java.binaries=target '''
+                    sh '''
+                        $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=taskmaster -Dsonar.projectKey=taskmaster \
+                        -Dsonar.java.binaries=target
+                    '''
                 }
             }
         }
@@ -63,18 +65,23 @@ pipeline {
         
         stage('Build and Tag Docker Image') {
             steps {
-                def image_tag = getCommitHashAndDateTime()
-                sh "docker build -t my-app:${image_tag} ."
-                sh "docker tag my-app:${image_tag} harbor.ntx-technology.com/my-app:${image_tag}"
+                script {
+                    def image_tag = getCommitHashAndDateTime()
+                    sh "docker build -t my-app:${image_tag} -f MyWebApp/Dockerfile ."
+                    sh "docker tag my-app:${image_tag} harbor.ntx-technology.com/my-app:${image_tag}"
+                }
             }
         }
 
         stage('Push to Docker Registry') {
             steps {
-                def image_tag = getCommitHashAndDateTime()
-                withDockerRegistry(credentialsId: 'local-registry', toolName: 'docker', url: 'https://harbor.ntx-technology.com') {
-                sh "docker push harbor.ntx-technology.com/my-app:${image_tag}"
+                script {
+                    def image_tag = getCommitHashAndDateTime()
+                    withDockerRegistry(credentialsId: 'local-registry', toolName: 'docker', url: 'https://harbor.ntx-technology.com') {
+                        sh "docker push harbor.ntx-technology.com/my-app:${image_tag}"
+                    }
+                }
             }
-        }                
+        }
     }
 }
