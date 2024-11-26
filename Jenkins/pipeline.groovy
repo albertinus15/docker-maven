@@ -73,6 +73,17 @@ pipeline {
             }
         }
 
+        stage('Trivy Scan') {
+            steps {
+                script{
+                    def image_tag = getCommitHashAndDateTime()
+                    sh "trivy image harbor.ntx-technology.com/my-app/maven-app:${image_tag} > trivy-report.txt"
+                    sh "cat trivy-report.txt"
+                }
+                
+            }
+        }        
+
         stage('Push to Docker Registry') {
             steps {
                 script {
