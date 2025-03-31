@@ -3,9 +3,9 @@ import java.text.SimpleDateFormat
 def getCommitHashAndDateTime() {
     def commitHash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
     def date = new Date()
-    def formatter = new SimpleDateFormat("yyyy-MM-dd")
+    def formatter = new SimpleDateFormat("yyyyMMdd")
     def formattedDate = formatter.format(date)
-    return "${commitHash}-${formattedDate}"
+    return "${commitHash}${formattedDate}"
 }
 
 pipeline {
@@ -36,6 +36,11 @@ pipeline {
             steps {
                 sh 'mvn test -f MyWebApp/pom.xml'
             }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'MyWebApp/target/surefire-reports/*.xml'
+                }
+            }
         }
     
         stage('Sonar Analysis') {
@@ -47,17 +52,27 @@ pipeline {
                     '''
                 }
             }
+            post {
+                always {
+                    echo "SonarQube Analysis completed"
+                }
+            }
         }
         
         stage('Build') {
             steps {
                 sh 'mvn package -f MyWebApp/pom.xml'
             }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'MyWebApp/target/*.war', fingerprint: true
+                }
+            }
         }
 
         stage('Publish Artifact') {
             steps {
-                withMaven(globalMavenSettingsConfig: 'setting-maven', jdk: '', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
+                withMaven(globalMavenSettingsConfig: 'setting-maven', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
                     sh 'mvn deploy -f MyWebApp/pom.xml'
                 }
             }
@@ -67,8 +82,8 @@ pipeline {
             steps {
                 script {
                     def image_tag = getCommitHashAndDateTime()
-                    sh "docker build -t maven-app:${image_tag} -f MyWebApp/Dockerfile ."
-                    sh "docker tag maven-app:${image_tag} harbor.ntx-technology.com/my-app/maven-app:${image_tag}"
+                    sh "docker build -t myapp_maven:${image_tag} -f MyWebApp/Dockerfile ."
+                    sh "docker tag myapp_maven:${image_tag} 156.67.219.189:8082/repository/repo/myapp_maven:${image_tag}"
                 }
             }
         }
@@ -77,10 +92,34 @@ pipeline {
             steps {
                 script{
                     def image_tag = getCommitHashAndDateTime()
-                    sh "trivy image harbor.ntx-technology.com/my-app/maven-app:${image_tag} > trivy-report.txt"
+                    // Menghasilkan output dalam format normal (teks)
+                    sh "trivy image 156.67.219.189:8082/repository/repo/myapp_maven:${image_tag} > trivy-report.txt"
+                    
+                    // Menghasilkan output dalam format JSON untuk diolah menjadi HTML
+                    sh "trivy image -f json 156.67.219.189:8082/repository/repo/myapp_maven:${image_tag} > trivy-report.json || true"
+                    
+                    // Membuat file HTML sederhana dengan hasil JSON
+                    sh '''
+                        echo '<html><head><title>Trivy Vulnerability Report</title>' > trivy-report.html
+                        echo '<style>body{font-family:Arial,sans-serif;margin:20px;} h1{color:#333;} .critical{background-color:#ff5252;} .high{background-color:#ff7e7e;} .medium{background-color:#ffcb2e;} .low{background-color:#ffe082;}</style>' >> trivy-report.html
+                        echo '</head><body><h1>Trivy Vulnerability Report</h1><pre>' >> trivy-report.html
+                        cat trivy-report.txt >> trivy-report.html
+                        echo '</pre></body></html>' >> trivy-report.html
+                    '''
+                    
+                    // Publikasi hasil scan sebagai HTML
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: '.',
+                        reportFiles: 'trivy-report.html',
+                        reportName: 'Trivy Vulnerability Report'
+                    ])
+                    
+                    echo "Trivy scan completed. See HTML report for details."
                     sh "cat trivy-report.txt"
                 }
-                
             }
         }        
 
@@ -88,11 +127,30 @@ pipeline {
             steps {
                 script {
                     def image_tag = getCommitHashAndDateTime()
-                    withDockerRegistry(credentialsId: 'local-registry', toolName: 'docker', url: 'https://harbor.ntx-technology.com') {
-                        sh "docker push harbor.ntx-technology.com/my-app/maven-app:${image_tag}"
+                    withDockerRegistry(credentialsId: 'nexus', url: 'http://156.67.219.189:8082/repository/repo/') {
+                        sh "docker push 156.67.219.189:8082/repository/repo/myapp_maven:${image_tag}"
                     }
                 }
             }
+            post {
+                success {
+                    echo "Docker image pushed successfully to repository"
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "Pipeline execution completed"
+            // Membersihkan workspace jika diperlukan
+            // cleanWs()
+        }
+        success {
+            echo "Pipeline executed successfully"
+        }
+        failure {
+            echo "Pipeline execution failed"
         }
     }
 }
